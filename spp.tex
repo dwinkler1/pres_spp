@@ -1,28 +1,15 @@
 \documentclass{beamer}
 \mode<presentation> {
-
   \usetheme{Singapore}
   \usecolortheme{whale}
   % \setbeamertemplate{footline}
   \setbeamercovered{transparent}
-
-  \AtBeginSection[]{
-  \begin{frame}
-  \vfill
-  \centering
-  \begin{beamercolorbox}[sep=8pt,center,shadow=true,rounded=true]{title}
-    \usebeamerfont{title}\insertsectionhead\par%
-  \end{beamercolorbox}
-  \vfill
-  \end{frame}
-}
-
 }
 \usepackage[utf8]{inputenc}
 \usepackage[T1]{fontenc}
-\usepackage[german]{babel}
-\usepackage[style=authoryear, backend=bibtex]{biblatex} 
-   \bibliography{citations} 
+\usepackage[english]{babel}
+\usepackage[style=authoryear, backend=biber, natbib=true]{biblatex} 
+   \addbibresource{citations.bib} 
    \usepackage{eurosym}
    \usepackage{booktabs}
 \title{Predicting Stock Returns based on quarterly SEC Reports using Deep Neural Networks}
@@ -37,13 +24,250 @@
   \titlepage
 \end{frame}
 
+\section{Predicting Stock Returns}
+\label{sec:intro}
+
 
 \begin{frame}{Introduction}
   \begin{itemize}
-  \item 
+\only<1->{
+\item Predicting stock returns is, like, really hard! \\ \citep{welch2007comprehensive} 
+\item Often a simple Random Walk or AR(1) outperforms complex models
+\item Company specific ``fundamentals'' improve predictions marginally
+\item ... so do market indicators
+
+  \item \textbf{What else could be used as predictors?}
+  }
+  \only<2->{
+  \item Think beyond numeric data!
+    }
   \end{itemize}
 \end{frame}
 
+\begin{frame}{Use TEXT as a predictor}
+  \begin{itemize}
+    \item A lot of information is available in text form
+    \item It contains insights beyond numeric indicators
+    \item ... that might even give a hint about future developments \\
+  \end{itemize}
+      ``The Company's financial condition and operating results have been in the past and may in the future be materially adversely affected by the Company's ability to manage its inventory levels and respond to short term shifts in customer demand patterns'' (Apple 10-Q filing, 1.2.2008)
+\end{frame}
 
+\begin{frame}
+  \frametitle{You might ask: ``How TF does that work?''}
+  \begin{itemize}
+   \item We'd like: \\ 
+     $r_t = \phi r_{t-1} + \beta TEXT + \varepsilon_t, \quad \varepsilon_t \sim N(0,\sigma^2)$
+
+    \item But we need a mapping: TEXT $\Rightarrow$ vector 
+    \item Current approach: Dictionaries \citep{loughran2011liability}
+    \item Problems:
+      \begin{itemize}
+      \item Does not scale well
+      \item Pre-processing\\
+        e.g. ``Stemming'': share = sharing?
+      \item Count positive/negative words\\
+        What about negations? What is ``positive''?
+      \end{itemize}
+    \item \textbf{*NEW*} approach: Model TEXT as sequence of characters
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Model TEXT as a sequence of characters}
+  \begin{itemize}
+  \item Basic idea \citep{krause2016mlstm}:\\
+    \begin{align*}
+      \label{eq:1}
+      p(c_1, c_2, \dots, c_T) = p(c_1) p(c_2|c_1) p(c_3 | c_1, c_2) \dots p(c_T|c_1, \dots, c_{T-1})
+    \end{align*}
+  \item $c_i$ being the $i$-th character in the TEXT
+  \item Minimize the prediction error of the next character given all previous ones
+  \item Can be solved efficiently using gradient descent $\rightarrow$ \\ ``Deep Learning''
+  \end{itemize} 
+\end{frame}
+
+\section{Deep Learning}
+\frame{\sectionpage}
+\begin{frame}
+  \frametitle{Quick Introduction}
+  \begin{itemize}
+  \item Similar to maximum likelihood \citep[pp. 128f.]{goodfellow2016deep}!
+  \item Adjust coefficient matrices until negative log-likelihood is minimized
+  \item However, we have \textbf{multiple} coefficient matrices which are linear 
+  \item Inbetween each operation there is a non-linearity so matrices are identified 
+  \item Deep in the sense that we do not see where the change happens and why!
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Gradient Descent}
+  \begin{enumerate}
+  \item Define a loss function \\
+    In our case the ``Cross Entropy'' 
+    \begin{equation}
+      \text{loss}(c, l) = -log\left({exp\{c_l\} \over \sum_J exp\{c_j\}}\right)
+    \end{equation}
+    
+  \item Calculate the gradient w.r.t. the inputs \\ (This shows the steepest direction!)
+  \item Move the weights matrices ``a little bit'' in the opposite direction
+  \item Repeat
+  \end{enumerate}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Efficiency}
+  \begin{itemize}
+  \item Differentiation can be automatized e.g. w/ PyTorch
+  \item Operations are automatically parallelized over GPUs
+  \item Relies only on the loss function (No $(X'X)^{-1}$ stuff)
+  \end{itemize}
+\end{frame}
+
+\section{Proposed Model}
+
+\begin{frame}
+  \frametitle{Recurrent Neural Network}
+  \begin{itemize}
+  \item Class of DL models for sequences\\
+    \begin{align}
+     h_t = f_a(W_{h} h_{t-1} + W_{x} x_t),
+    \end{align}
+    
+  \item Specifically: multiplicative long short-term memory (mLSTM)
+  \item Achieves state of the art in sentiment discovery \citep{sentiment_neuron}
+  \item I'll show that it can also ``learn'' about company reports
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{The mLSTM}
+  \begin{enumerate}
+  \item Input
+  \begin{align}
+m_t &= (W_{mx} x_t) \odot (W_{mh} h_{t-1}) \label{eq:mult} \\
+\tilde{c}_t &= W_{hx}x_t + W_{hm} m_t      \label{eq:prop}
+\end{align}
+
+\item Update
+\begin{align}
+f_t &= \sigma(W_{fx} x_t + W_{fm} m_t)      \label{eq:forget} \\
+i_t &= \sigma(W_{ix} x_t + W_{im} m_t)     \label{eq:input} \\
+o_t &= \sigma(W_{ox} x_t + W_{om} m_t)      \label{eq:output}
+\end{align}
+
+\item Output
+\begin{align}
+   c_t &= f_t \odot c_{t-1} + i_t \odot tanh(\tilde{c}_t) \label{eq:cell} \\
+   h_t &= tanh(c_t) \odot o_t \label{eq:out}
+\end{align}
+\end{enumerate} 
+\end{frame}
+
+\begin{frame}
+  \frametitle{Econometric Framework}
+  \begin{itemize}
+  \item Dynamic Panel regression \\
+    \begin{equation}
+      r_{kt}= \alpha_k + \phi r_{k t-1}+  F_{kt}  \beta_1 + S_{kt}   \beta_2 + \varepsilon_{kt},\quad \varepsilon_{kt} \sim N(0, \sigma^2) \label{eq: panelreg}
+  \end{equation}
+  
+\item $S_{kt}$ is the final cell state; $F_{kt}$ the fundamentals
+
+\item Using shrinkage priors \citep{aki2017sparsity} to get rid of unnecessary coefficients
+\item Estimate using \href{https://arogozhnikov.github.io/2016/12/19/markov_chain_monte_carlo.html}{Hamiltonian Monte Carlo} with Stan
+\item Evaluated using log-predictive density and RMSE \citep{geweke2010comparing} 
+
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Data}
+  \begin{itemize}
+  \item Quarterly Securities and Exchange Commission filings (\href{https://www.sec.gov/edgar.shtml}{EDGAR})
+  \item Stockprices from Center for Research in Security Prices
+  \item Fundamentals from Financial Ratios Suite (\href{http://www.whartonwrds.com/our-datasets/}{WRDS})
+  \item 165 companies
+  \item 2000Q2 - 2016Q4
+  \item 38Q Estimation - 29Q Holdout
+  \end{itemize}
+\end{frame}
+
+\section{Results}
+\frame{\sectionpage}
+\begin{frame}
+  %\frametitle{Results}
+  
+\begin{figure}
+    \centering
+    \includegraphics[width=2.5in]{includes/lscore_qtrs.png}
+    \caption{Log-Scores for Quarters relative to Random Walk}
+    \label{fig:lscore_qtrs}
+\end{figure}
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+\begin{figure}[ht]
+    \centering
+    \includegraphics[width=2.7in]{includes/lscore_compmod.png}
+    \caption{Log-Scores for Quarters relative to comparison model without text data}
+    \label{fig:lscore_compmod}
+\end{figure}
+
+\begin{figure}
+    \centering
+    \includegraphics[width=2.5in]{includes/rmse_qtrs.png}
+    \caption{RMSE for Quarters relative to Random Walk}
+    \label{fig:rmse_qtrs}
+\end{figure}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Relative Improvement}
+  \begin{table}[ht]
+\centering
+\begin{tabular}{rrrrrr}
+  \hline
+  & \multicolumn{2}{c}{Log-Scores} & &  \\
+    \cline{2-3} \cline{5-6}
+ \textbf{Model} & \textbf{Without Text}&  \textbf{With Text} \\ \hline
+  RW(S)     & 0.00000   & -0.00102 \\
+  RWM(S)    & -0.00122  & -0.00081  \\  
+  RWFE(S)   & -0.00062  & -0.00213    \\
+  AR(S)     & -0.00017  & 0.00046   \\
+  ARFE(S)   & -0.00131  & 0.00478   \\
+  ARF(S)    & 0.00121   & 0.00147   \\
+  ARFFE(S)  & 0.00103   & 0.00071   \\
+  F(S)      & -0.00063  & 0.00235   \\
+  FFE(S)    & 0.00187   & -0.00157   \\
+   \hline
+\end{tabular}
+\caption{Log-Scores and RMSE relative to RW} 
+\label{tab:results}
+\end{table}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Conclusion \& Further Research}
+  \begin{itemize}
+  \item Overall models with text information + AR best
+  \item So mLSTM does extract relevant information
+  \item Shrinkage is major problem for many predictors. Suggestions?
+  \item Texts do not work for all companies. How to identify which?
+  \item Improvement is marginal. We average over quarters.
+  \item How about 1-2 weeks after publishing of report?
+  \item Using only companies whose reports matter?
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+  \printbibliography
+\end{frame}
 
 \end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:

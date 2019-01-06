@@ -1,0 +1,171 @@
+%\documentclass{beamer}
+\documentclass{article}
+\usepackage[letterpaper, left=1in, top=1in, right=1in, bottom=1in,nohead,includefoot]{geometry}
+
+\usepackage{beamerarticle}
+\mode<presentation> {
+  \usetheme{Singapore}
+  \usecolortheme{whale}
+  % \setbeamertemplate{footline}
+  \setbeamercovered{transparent}
+}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[english]{babel}
+\usepackage[style=authoryear, backend=biber, natbib=true]{biblatex} 
+   \addbibresource{citations.bib} 
+   \usepackage{eurosym}
+   \usepackage{booktabs}
+\title{Predicting Stock Returns based on quarterly SEC Reports using Deep Neural Networks}
+   
+\author{Author: Daniel Winkler \\ Supervisors: Florian Huber \& Christian Hotz-Behofsits}
+
+\date{11 January 2019}
+
+\begin{document}
+
+\begin{frame}[plain]
+  \titlepage
+\end{frame}
+
+\section*{Predicting Stock Returns based on quarterly SEC Reports using Deep Neural Networks} \\
+\begin{center}
+  Author: Daniel Winkler \\
+  Supervisors: Florian Huber \& Christian Hotz-Behofsits
+\end{center}
+\section{Predicting Stock Returns}
+\label{sec:intro}
+
+
+\begin{frame}{Introduction}
+  \begin{itemize}
+\only<1->{
+\item Predicting stock returns is, like, really hard! \\ \citep{welch2007comprehensive} 
+\item Often a simple Random Walk or AR(1) outperforms complex models
+\item Company specific ``fundamentals'' improve predictions marginally
+\item ... so do market indicators
+
+  \item \textbf{What else could be used as predictors?}
+  }
+  \only<2->{
+  \item Think beyond numeric data!
+    }
+  \end{itemize}
+\end{frame}
+
+\begin{frame}
+  \frametitle{Model TEXT as a sequence of characters}
+  \begin{itemize}
+  \item Basic idea \citep{krause2016mlstm}:\\
+    \begin{align*}
+      \label{eq:1}
+      p(c_1, c_2, \dots, c_T) = p(c_1) p(c_2|c_1) p(c_3 | c_1, c_2) \dots p(c_T|c_1, \dots, c_{T-1})
+    \end{align*}
+  \item $c_i$ being the $i$-th character in the TEXT
+  \item Minimize the prediction error of the next character given all previous ones
+  \item Can be solved efficiently using gradient descent $\rightarrow$ \\ ``Deep Learning''
+  \end{itemize} 
+\end{frame}
+
+\section{Deep Learning}
+\frame{\sectionpage}
+\begin{frame}
+  \frametitle{Quick Introduction}
+  \begin{itemize}
+  \item Similar to maximum likelihood \citep[pp. 128f.]{goodfellow2016deep}!
+  \item Adjust coefficient matrices until negative log-likelihood is minimized
+  \item However, we have \textbf{multiple} coefficient matrices which are linear 
+  \item Inbetween each operation there is a non-linearity so matrices are identified 
+  \item Deep in the sense that we do not see where the change happens and why!
+  \end{itemize}
+\end{frame}
+
+
+\section{Proposed Model}
+
+\begin{frame}
+  \frametitle{Recurrent Neural Network}
+  \begin{itemize}
+  \item Class of DL models for sequences\\
+    \begin{align}
+     h_t = f_a(W_{h} h_{t-1} + W_{x} x_t),
+    \end{align}
+    
+  \item Specifically: multiplicative long short-term memory (mLSTM)
+  \item Achieves state of the art in sentiment discovery \citep{sentiment_neuron}
+  \item I'll show that it can also ``learn'' about company reports
+  \end{itemize}
+\end{frame}
+\begin{frame}
+  \frametitle{Econometric Framework}
+  \begin{itemize}
+  \item Dynamic Panel regression \\
+    \begin{equation}
+      r_{kt}= \alpha_k + \phi r_{k t-1}+  F_{kt}  \beta_1 + S_{kt}   \beta_2 + \varepsilon_{kt},\quad \varepsilon_{kt} \sim N(0, \sigma^2) \label{eq: panelreg}
+  \end{equation}
+  
+\item $S_{kt}$ is the final cell state; $F_{kt}$ the fundamentals
+
+\item Using shrinkage priors \citep{aki2017sparsity} to get rid of unnecessary coefficients
+\item Estimate using Hamiltonian Monte Carlo with Stan
+\item Evaluated using log-predictive density and RMSE \citep{geweke2010comparing} 
+
+  \end{itemize}
+\end{frame}
+
+
+\section{Results}
+\frame{\sectionpage}
+% \begin{frame}
+%   %\frametitle{Results}
+  
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=2.5in]{includes/lscore_qtrs.png}
+%     \caption{Log-Scores for Quarters relative to Random Walk}
+%     \label{fig:lscore_qtrs}
+% \end{figure}
+% \end{frame}
+
+% \begin{frame}[allowframebreaks]
+% \begin{figure}[ht]
+%     \centering
+%     \includegraphics[width=2.7in]{includes/lscore_compmod.png}
+%     \caption{Log-Scores for Quarters relative to comparison model without text data}
+%     \label{fig:lscore_compmod}
+% \end{figure}
+
+% \begin{figure}
+%     \centering
+%     \includegraphics[width=2.5in]{includes/rmse_qtrs.png}
+%     \caption{RMSE for Quarters relative to Random Walk}
+%     \label{fig:rmse_qtrs}
+% \end{figure}
+% \end{frame}
+
+
+
+\begin{frame}
+  %\frametitle{Conclusion \& Further Research}
+  \begin{itemize}
+  \item Overall models with text information + AR best
+  \item So mLSTM does extract relevant information
+  \item Shrinkage is major problem for many predictors. Suggestions?
+  \item Texts do not work for all companies. How to identify which?
+  \item Improvement is marginal. We average over quarters.
+  \item How about 1-2 weeks after publishing of report?
+  \item Using only companies whose reports matter?
+  \end{itemize}
+\end{frame}
+
+\begin{frame}[allowframebreaks]
+  \printbibliography
+\end{frame}
+
+\end{document}
+
+
+%%% Local Variables:
+%%% mode: latex
+%%% TeX-master: t
+%%% End:
